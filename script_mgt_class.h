@@ -60,6 +60,7 @@ class Script_mgt_class
     private:
         char *whole;
         char *whole_re;
+        char *whole_cmp;
         char *splited;
         char *splited_re;
         char *parameter;

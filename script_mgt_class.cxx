@@ -13,16 +13,33 @@
 
 #define PATH_TEMPLATE "./template/"
 
-#define SCRIPT_TEMPLATE_VAR "src_var= read_field(src_grid_for_var, src_grid_file, \"%s\")\ndst_var= alloc_field(dst_grid_for_var)\n"
-#define SCRIPT_TEMPLATE_OPT "remap_oprt = new_operator(\"%s\", src_grid_for_remap, dst_grid_for_remap)\n"
-#define SCRIPT_TEMPLATE_SET "set_parameter(remap_oprt,\"%s\", \"%s\")\n"
-#define SCRIPT_TEMPLATE_WRITE "remap_strategy = combine_operators(remap_oprt)\nremap(remap_strategy, src_var, dst_var)\noutput_data_file = add_nc_file(\"./output/%s.nc\",\"w\")\nwrite_field(output_data_file, dst_var)\n"
+#define SCRIPT_TEMPLATE_VAR     "src_var = read_field(src_grid_for_var, src_grid_file, \"%s\")\n" \
+                                "dst_var = alloc_field(dst_grid_for_var)\n"
+#define SCRIPT_TEMPLATE_OPT     "remap_oprt = new_operator(\"%s\", src_grid_for_remap, dst_grid_for_remap)\n"
+#define SCRIPT_TEMPLATE_SET     "set_parameter(remap_oprt,\"%s\", \"%s\")\n"
+#define SCRIPT_TEMPLATE_WRITE   "remap_strategy = combine_operators(remap_oprt)\n" \
+                                "remap(remap_strategy, src_var, dst_var)\n" \
+                                "output_data_file = add_nc_file(\"./output/%s.nc\",\"w\")\n" \
+                                "write_field(output_data_file, dst_var)\n"
 
-#define SCRIPT_TEMPLATE_VAR_RE "var_nc_file = add_nc_file(\"./output/%s.nc\",\"r\")\nsrc_var = alloc_field(src_grid_for_var)\ndst_var = read_field(dst_grid_for_var, var_nc_file, \"%s\")\n"
-#define SCRIPT_TEMPLATE_OPT_RE "remap_oprt = new_operator(\"%s\", dst_grid_for_remap, src_grid_for_remap)"
-#define SCRIPT_TEMPLATE_SET_RE
-#define SCRIPT_TEMPLATE_WRITE_RE "remap_strategy = combine_operators(remap_oprt)\nremap(remap_strategy, dst_var, src_var)\noutput_data_file = add_nc_file(\"./output/%s_RE.nc\",\"w\")\nwrite_field(output_data_file, src_var)\n"
+#define SCRIPT_TEMPLATE_VAR_RE  "var_nc_file = add_nc_file(\"./output/%s.nc\",\"r\")\n" \
+                                "src_var = alloc_field(src_grid_for_var)\n" \
+                                "dst_var = read_field(dst_grid_for_var, var_nc_file, \"%s\")\n"
+#define SCRIPT_TEMPLATE_DST_MASK "dst_grid_for_var%mask = extract_mask(dst_var, \"1.0e+5\", \"1.0e+40\")\n"
+#define SCRIPT_TEMPLATE_OPT_RE   "remap_oprt = new_operator(\"%s\", dst_grid_for_remap, src_grid_for_remap)\n"
+#define SCRIPT_TEMPLATE_WRITE_RE "remap_strategy = combine_operators(remap_oprt)\n" \
+                                 "remap(remap_strategy, dst_var, src_var)\n" \
+                                 "output_data_file = add_nc_file(\"./output/%s_RE.nc\",\"w\")\n" \
+                                 "write_field(output_data_file, src_var)\n"
 
+#define SCRIPT_TEMPLATE_
+#define SCRIPT_TEMPLATE_VAR_CMP "dst_grid_file = add_nc_file(\"./output/%s_RE.nc\",\"r\")\n" \
+                                "first_var = read_field(src_grid_for_var, src_grid_file, \"%s\")\n" \
+                                "second_var = read_field(src_grid_for_var, dst_grid_file, \"%s\")\n"
+#define SCRIPT_TEMPLATE_MASK_CMP  "src_grid_for_remap%mask = extract_mask(first_var, \"1.0e+5\", \"1.0e+40\")"
+#define SCRIPT_TEMPLATE_WRITE_CMP "error = evaluate_error(first_var, second_var, src_grid_for_remap, \"true\")\n" \
+                                  "output_data_file = add_nc_file(\"./output/%s_ERROR.nc\",\"w\")\n" \
+                                  "write_field(output_data_file, error)\n"
 json cfg_json;
 int process_number;
 int num_script;
@@ -332,6 +349,7 @@ Script_mgt_class::Script_mgt_class(char* filename)
 {
     this->whole = new char[MAX_FILE_SIZE];
     this->whole_re = new char[MAX_FILE_SIZE];
+    this->whole_cmp = new char[MAX_FILE_SIZE];
     this->splited = new char[MAX_FILE_SIZE/8];
     this->splited_re = new char[MAX_FILE_SIZE/8];
     this->parameter = new char[MAX_FILE_SIZE/8];
@@ -345,6 +363,7 @@ Script_mgt_class::~Script_mgt_class()
 {
     delete[] this->whole;
     delete[] this->whole_re;
+    delete[] this->whole_cmp;
     delete[] this->splited;
     delete[] this->splited_re;
     delete[] this->parameter;
@@ -403,11 +422,13 @@ int Script_mgt_class::read_file_to_str(char* filename, char* str, int offset)
 
 void Script_mgt_class::generate_script_file()
 {
-    int filesize, filesize_re, num_parameter, filesize_prev;
+    int filesize, filesize_re, num_parameter, filesize_prev, filesize_cmp;
     char script_filename[MAX_STRING_LONG_LENGTH], *ptr_split, *ptr_word, *ptr_sprt, *ptr_end;
     FILE *fp;
+
     memset(this->whole, '\0', MAX_FILE_SIZE);
     memset(this->whole_re, '\0', MAX_FILE_SIZE);
+    memset(this->whole_cmp, '\0', MAX_FILE_SIZE);
     memset(this->splited, '\0', MAX_FILE_SIZE/8);
     memset(this->splited_re, '\0', MAX_FILE_SIZE/8);
     this->is_src_splited = false;
@@ -429,6 +450,9 @@ void Script_mgt_class::generate_script_file()
             CTS_WARNING("Mask seems to be defined twice in \"%s\" as src grid.\n", src_grid_box.get_content());
     }
     filesize_prev = filesize;
+
+    strncpy(this->whole_cmp, this->whole, MAX_FILE_SIZE);
+    filesize_cmp = filesize;
 
     //dst grid defination
     if(this->lock_dst_to_src)
@@ -463,7 +487,7 @@ void Script_mgt_class::generate_script_file()
     if(this->is_src_splited)
     {
 
-        strncat(this->whole, this->splited, MAX_FILE_SIZE);
+        sprintf(this->whole + filesize, "%s", this->splited);
         filesize = strlen(this->whole);
         this->whole[filesize++] = '\n';
     }
@@ -533,10 +557,11 @@ void Script_mgt_class::generate_script_file()
     }
     
     //Mask defination
-    if(this->is_dst_splited)
+    //if(this->is_dst_splited)
     {
 
-        strncat(this->whole_re, this->splited_re, MAX_FILE_SIZE);
+        //strncat(this->whole_re, this->splited_re, MAX_FILE_SIZE);
+        strncat(this->whole_re, SCRIPT_TEMPLATE_DST_MASK, MAX_FILE_SIZE);
         filesize_re = strlen(this->whole_re);
         this->whole_re[filesize_re++] = '\n';
     }
@@ -588,13 +613,36 @@ void Script_mgt_class::generate_script_file()
     fwrite(this->whole_re, sizeof(char), filesize_re, fp);
     fclose(fp);
 
+    /* the "whole_cmp" part */
+    snprintf(this->whole_cmp + filesize_cmp, MAX_FILE_SIZE, SCRIPT_TEMPLATE_VAR_CMP, this->output_file_name, src_grid_box.get_attribute(), src_grid_box.get_attribute());
+    filesize_cmp = strlen(this->whole_cmp);
+
+    /* if src cor is splited, then we assume that a mask is needed */
+    if(this->is_src_splited)
+    {
+        strncat(this->whole_cmp, SCRIPT_TEMPLATE_MASK_CMP, MAX_FILE_SIZE);
+        filesize_cmp = strlen(this->whole_cmp);
+        this->whole_cmp[filesize_cmp++] = '\n';
+    }
+    /* evaluate error and write to file */
+    snprintf(this->whole_cmp + filesize_cmp, MAX_FILE_SIZE, SCRIPT_TEMPLATE_WRITE_CMP, this->output_file_name);
+    filesize_cmp = strlen(this->whole_cmp);
+    
+    sprintf(script_filename, "./script/%s_ERROR.cor", this->output_file_name);
+    fp = fopen(script_filename, "w");
+    fwrite(this->whole_cmp, sizeof(char), filesize_cmp, fp);
+    fclose(fp);
+
     this->output_file_id++;
     num_script = this->output_file_id;
 }
 
 bool Script_mgt_class::is_src_dst_same()
 {
-    return strncmp(this->src_grid_box.get_content(), this->dst_grid_box.get_content(), MAX_STRING_LONG_LENGTH) == 0;
+    if(lock_dst_to_src)
+        return strncmp(this->src_grid_box.get_content(), this->dst_grid_box.get_content(src_grid_box.get_index()), MAX_STRING_LONG_LENGTH) == 0;
+    else
+        return strncmp(this->src_grid_box.get_content(), this->dst_grid_box.get_content(), MAX_STRING_LONG_LENGTH) == 0;
 }
 
 void Script_mgt_class::loop()

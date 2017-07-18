@@ -18,6 +18,8 @@ int do_system(int file_index, int flag)
         sprintf(cmd, "./CoR ./script/%s.cor > ./log/%s.log 2>&1", filename_list[file_index], filename_list[file_index]);
     else if(flag == 1)
         sprintf(cmd, "./CoR ./script/%s_RE.cor > ./log/%s_RE.log 2>&1", filename_list[file_index], filename_list[file_index]);
+    else if(flag == 2)
+        sprintf(cmd, "./CoR ./script/%s_ERROR.cor > ./log/%s_ERROR.log 2>&1", filename_list[file_index], filename_list[file_index]);
     else
         sprintf(cmd, "", filename_list[file_index], filename_list[file_index]);
     printf("Executing CMD: %s\n", cmd);

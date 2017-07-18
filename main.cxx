@@ -11,7 +11,8 @@ int main(int argc, char * argv[])
         Script_mgt_class script_gen(argv[1]);
         script_gen.loop();
         if(exec_all_scripts(0))
-            exec_all_scripts(1);
+            if(exec_all_scripts(1))
+                exec_all_scripts(2);
         return 0;
     }
     else
